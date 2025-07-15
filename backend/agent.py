@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Optional
 from langchain_openai import OpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
@@ -12,6 +12,7 @@ import re
 import dateparser
 import threading
 from langchain.agents import initialize_agent, Tool
+from dateparser.search import search_dates
 
 # --- System prompt for all agent responses ---
 SYSTEM_PROMPT = """
@@ -25,77 +26,115 @@ You MUST NOT hallucinate or guess. If you don't know something, say so politely 
 
 ---
 
-### 🛠️ Tools Available to You:
-
-1. **RAG Query Tool** – `get_rag_context(user_id, metadata_filter)`
-   - Use this to retrieve relevant health information for a user from one of three data types:
-     - `"food"`: diet or meal logs
-     - `"vitals"`: heart rate, blood pressure, step count, etc.
-     - `"medical_record"`: diagnoses, prior ER visits, prescribed medications
-   - Always include `"user_id"` and filter by `"data_type"` and (optionally) `"date"`
-   - Example: `get_rag_context("user_mary", {{"data_type": "food"}})`
-
-2. **Current Date Tool** – `get_current_date()`
-   - Use this to understand the current date/time when needed for reasoning
-
-3. **User Name Tool** – `get_user_name()`
-   - Use this to get the current user's name: {name}
-   - Always use this name when addressing the user
+CONVERSATION MEMORY (CRITICAL):
+- You have access to the full conversation history (memory) between you and the user.
+- ALWAYS use this memory to resolve ambiguous, follow-up, or context-dependent questions.
+- If the user refers to something mentioned earlier (e.g., "that day", "the food I had before", "my last result"), use previous messages to infer what they mean and answer accordingly.
+- If a question is unclear, ask a clarifying question, but first try to answer using memory.
+- Never ignore previous conversation context when responding.
 
 ---
 
-### 🤖 Behavior Guidelines:
-
-- Always speak with **empathy** and warmth
-  - Use reassuring phrases like "I understand", "Don't worry", or "I'm here with you"
-  - Be gentle and caring in your tone
-- Always analyze the user's message carefully and ask clarifying questions if needed
-- Personalize all responses using the user's name when available
-- Vary your responses. Do **NOT** sound robotic or repetitive
-- Only use tools when required. If information is not available, respond politely and explain that
+EMERGENCY STATE HANDLING:
+- If the user is in an emergency state (e.g., chest pain, 911 called), always keep responses short, factual, and focused on the emergency.
+- Do NOT give generic health or posture advice during an emergency.
+- Only return to normal conversation if the user says they are okay or help has arrived.
+- Example: If the user says "I cannot sit properly" after a heart pain emergency, remind them to stay calm, help is on the way, and not to move unless necessary.
 
 ---
 
-### 🧠 Health Evaluation Workflow:
-
-1. **Symptom Detection** – decide if the issue seems **mild** or **serious**
-2. **Data Retrieval via RAG** – gather `"food"`, `"vitals"`, and `"medical_record"` data
-3. **Respond Based on Severity**
-   - **Mild:** explicitly state "this appears to be mild" or "this is a mild issue", give suggestion, say you will check back in 5 minutes, and include a reminder
-   - **Serious:** explicitly state "this may be serious" or "this is concerning", ask whether to call 911 and contacts; if user agrees, simulate the emergency actions
-4. **If unsure:** ask follow-up questions
+DATE-AWARE HEALTH DATA RETRIEVAL (RAG):
+- Whenever the user reports a symptom or asks any question related to their health, body, or condition, retrieve data using `get_rag_context`.
+- If the user mentions a date (e.g., “yesterday”, “July 14”), convert it to `YYYY-MM-DD`.
+- If no date is mentioned, call `get_current_date()` to use today’s date.
+- Always add this date in the metadata filter like:
+  {{"user_id": "user_john", "data_type": "vitals", "timestamp": "2025-07-15"}}
+- Only return data that matches that date exactly.
 
 ---
 
-### 📝 Examples:
+TOOLS AVAILABLE TO YOU:
 
-Mild example:
-```
+1. RAG Query Tool — `get_rag_context(user_id, metadata_filter)`
+   - Used to retrieve data from:
+     - "food" — diet or meals
+     - "vitals" — heart rate, BP, steps, etc.
+     - "medical_record" — diagnoses, medications, ER visits
+
+2. Current Date Tool — `get_current_date()`
+   - Get today’s date
+
+3. User Name Tool — `get_user_name()`
+   - Get the current user's name ({name})
+
+---
+
+BEHAVIOR GUIDELINES:
+- Speak with warmth and empathy
+- Reassure the user (e.g., “I’m here with you”)
+- Use the user's name naturally
+- Vary your phrasing; avoid repetition
+- Only use tools when necessary
+- Never guess if something is unknown
+
+---
+
+HEALTH EVALUATION WORKFLOW:
+
+1. SYMPTOM DETECTION:
+   - Detect health-related complaints (e.g., “my chest hurts”, “I feel dizzy”)
+   - Trigger RAG for vitals, food, medical_record
+
+2. DETERMINE SEVERITY:
+   - Mild = low-risk, fatigue, hydration-related
+   - Serious = heart, breathing, fainting, severe pain
+
+3. RESPOND ACCORDINGLY:
+   - Mild case:
+     - Say “This appears to be a mild issue...”
+     - Give light suggestions (rest, hydration)
+     - Say: “I’ll check back with you in 5 minutes.” Include a reminder.
+   - Serious case:
+     - Say: “This may be serious based on your symptoms and history.”
+     - Ask: “Should I call 911 and notify your emergency contacts?”
+     - If confirmed: print → `Calling 911... Sharing location... Notifying emergency contact...`
+
+4. IF UNCERTAIN:
+   - Ask a follow-up question
+   - Never assume or guess
+
+---
+
+EXAMPLES:
+
+Mild Case:
 User: I feel dizzy and light-headed this morning.
-Agent Process:
-  get_rag_context("user_mary", {{"data_type": "food"}})  → skipped dinner
-  get_rag_context("user_mary", {{"data_type": "vitals"}}) → normal heart rate
-Agent Response:
-  Based on your recent meals, vitals, and medical history, this appears to be a mild issue. Try eating something light and drinking water. I'll check back with you in 5 minutes. (Reminder: Follow up with user in 5 minutes)
-```
 
-Serious example:
-```
-User: My chest feels tight and I'm struggling to breathe.
 Agent Process:
-  get_rag_context("user_john", {{"data_type": "medical_record"}}) → history of arrhythmia
+get_rag_context("user_mary", {{"data_type": "food", "timestamp": "2025-07-15"}}) → skipped dinner  
+get_rag_context("user_mary", {{"data_type": "vitals", "timestamp": "2025-07-15"}}) → normal heart rate
+
 Agent Response:
-  Given your symptoms and medical history, this may be serious. Would you like me to call 911 and notify your emergency contacts?
-  (If user says yes → Calling 911... Sharing location... Notifying emergency contact...)
-```
+Based on your meals, vitals, and health records, this appears to be a mild issue. Try drinking some water and having a small meal. I’ll check back with you in 5 minutes. (Reminder: Follow up with Mary in 5 minutes)
 
 ---
 
-### ❗Restrictions:
-- Never fabricate information or make assumptions
-- Always explain when something is unknown or unavailable
-- Only answer based on retrieved facts and current date
-- Always prioritize safety, empathy, and clarity
+Serious Case:
+User: My chest feels tight and I'm struggling to breathe.
+
+Agent Process:
+get_rag_context("user_john", {{"data_type": "medical_record", "timestamp": "2025-07-15"}}) → history of arrhythmia
+
+Agent Response:
+Given your medical history and symptoms, this may be serious. Would you like me to call 911 and notify your emergency contacts?  
+(If user says yes → Calling 911... Sharing location... Notifying emergency contact...)
+
+---
+
+RESTRICTIONS:
+- Never fabricate or assume answers
+- Do not mix dates unless explicitly asked
+- Be clear, safe, and helpful always
 
 (Current date: {date}, User: {name})
 """
@@ -127,6 +166,41 @@ def get_current_date(query=None):
     # Format as: Monday, July 14, 2025
     return dt_obj.strftime("%A, %B %d, %Y")
 
+def _infer_data_type_from_query(q: str) -> Optional[str]:
+    q_lower = q.lower()
+    if any(word in q_lower for word in ["food", "meal", "diet", "breakfast", "lunch", "dinner"]):
+        return "food"
+    if any(word in q_lower for word in ["vitals", "heart", "blood pressure", "oxygen", "pulse", "steps", "step count"]):
+        return "vitals"
+    if any(word in q_lower for word in ["medical", "diagnosis", "record", "history", "prescribed", "medication"]):
+        return "medical_record"
+    return None
+
+def _extract_date_from_query(q: str) -> Optional[str]:
+    """Return a YYYY-MM-DD string if a date-like expression is found in the query."""
+    # First try search_dates to find any date expression in the sentence
+    results = search_dates(q, settings={'RELATIVE_BASE': datetime.datetime.now()})
+    if results:
+        for txt, dt in results:
+            txt_l = txt.lower().strip()
+            # Accept if the match contains any digit OR clearly date-related keywords
+            if any(ch.isdigit() for ch in txt) or any(k in txt_l for k in [
+                "yesterday", "today", "tomorrow", "last", "ago", "week", "month", "year"]):
+                return dt.strftime('%Y-%m-%d')
+    # Fallback to direct parse of the whole query only if query itself hints at a date
+    date_keywords = [
+        "yesterday", "today", "tomorrow", "last", "ago", "week", "month", "year",
+        "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+        "january", "february", "march", "april", "june", "july", "august", "september", "october", "november", "december"
+    ]
+    if any(ch.isdigit() for ch in q) or any(k in q.lower() for k in date_keywords):
+        dt = dateparser.parse(q, settings={'RELATIVE_BASE': datetime.datetime.now()})
+        if dt:
+            return dt.strftime('%Y-%m-%d')
+    return None
+
+
 def get_rag_context_tool(query, user_id):
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     vectorstore = PineconeVectorStore(
@@ -135,16 +209,28 @@ def get_rag_context_tool(query, user_id):
         text_key="text",
         index_name="elderly-health-agent"
     )
+    date_str = _extract_date_from_query(query)
+    if not date_str:
+        date_str = datetime.date.today().strftime('%Y-%m-%d')
+
+    data_type = _infer_data_type_from_query(query)
+    metadata_filter = {
+        "user_id": {"$eq": user_id},
+        "date": {"$eq": date_str}
+    }
+    if data_type:
+        metadata_filter["data_type"] = {"$eq": data_type}
+
     retriever = vectorstore.as_retriever(
         search_kwargs={
-            "k": 5,  # Reduce from 5 to 2
-            "filter": {"user_id": user_id}
+            "k": 5,
+            "filter": metadata_filter
         }
     )
     docs = retriever.get_relevant_documents(query)
     if docs:
         return docs[0].page_content
-    return "No relevant health data found."
+    return f"No health data found for {date_str}."
 
 def get_user_name(user_id: str):
     """Extract user name from user_id"""
@@ -152,14 +238,17 @@ def get_user_name(user_id: str):
         return user_id.replace("user_", "").capitalize()
     return "User"
 
-def build_tools(user_id):
+def build_tools(user_id, current_message: str):
+    """Return the list of tools, ensuring get_rag_context_tool receives the full user message for correct date parsing."""
     name = get_user_name(user_id)
-    
+
     return [
         Tool(
             name="get_rag_context",
-            func=lambda q: get_rag_context_tool(q, user_id=user_id),
-            description="Use this to answer any question about the user's health, food, vitals, or medical records."
+            # We ignore the LLM-provided query (`q`) and instead use the full user message so
+            # that date and data-type inference is always accurate.
+            func=lambda q=None: get_rag_context_tool(current_message, user_id=user_id),
+            description="Retrieve health data (food, vitals, medical_record) for the user. Automatically infers date and data type from the current question. Use this to answer any question about the user's health, diet, vitals, or medical history. If user has any problem with thier health use this data to understand and give your prediction on if its mild or serious as well.Alwasys use todays date for the data retrieval unless user specifies yesterday or any other day for prediction of symptoms"
         ),
         Tool(
             name="get_current_date",
@@ -199,9 +288,73 @@ def agent_response(message: str, user_id: str = None) -> str:
     print(f"[DEBUG] Incoming message: '{message}' | user_id: {user_id}")
     name = get_user_name(user_id)
     today = datetime.date.today().strftime("%B %d, %Y")
-    tools = build_tools(user_id)
-    system_prompt = SYSTEM_PROMPT.format(name=name, date=today)
+
+    # Detect symptom keywords
+    symptom_keywords = [
+        "pain", "hurt", "ache", "dizzy", "dizziness", "light-headed", "lightheaded",
+        "tight", "pressure", "nausea", "breath", "breathing", "faint", "bleeding",
+        "vomit", "palpitation", "arrhythmia", "cramp", "chest", "heart"
+    ]
+
+    extra_context = ""
+    if any(word in message.lower() for word in symptom_keywords):
+        # Determine the date to use (parse from message or default today)
+        date_str_symptom = _extract_date_from_query(message) or datetime.date.today().strftime('%Y-%m-%d')
+        # Fetch data for all three types
+        food_ctx = get_rag_context_tool(f"food {date_str_symptom}", user_id)
+        vitals_ctx = get_rag_context_tool(f"vitals {date_str_symptom}", user_id)
+        med_ctx = get_rag_context_tool(f"medical record {date_str_symptom}", user_id)
+
+        extra_context = (
+            f"\n\n---\nFood on {date_str_symptom}: {food_ctx}\n"
+            f"Vitals on {date_str_symptom}: {vitals_ctx}\n"
+            f"Medical record on {date_str_symptom}: {med_ctx}\n---\n"
+        )
+
+    tools = build_tools(user_id, message)
+    system_prompt = extra_context + SYSTEM_PROMPT.format(name=name, date=today)
     
+    # Emergency state: track as dict with 'active' and 'reason'
+    if user_id not in emergency_states:
+        emergency_states[user_id] = {"active": False, "reason": None}
+
+    # If emergency is active, keep responses contextual and varied until cleared
+    if emergency_states[user_id]["active"]:
+        # Clear emergency when user confirms help has arrived or they feel okay
+        if any(p in message.lower() for p in ["help arrived", "paramedics", "ambulance", "i'm fine", "i am fine", "feel better", "i'm okay", "im okay", "i feel okay"]):
+            emergency_states[user_id] = {"active": False, "reason": None}
+            return (
+                f"I'm relieved help has arrived, {name}. I'm here if you need anything else or have questions while you recover."
+            )
+
+        state = emergency_states[user_id]
+        turn = state.get("turn", 0) + 1
+        state["turn"] = turn  # persist updated turn count
+        reason = state.get("reason", "your symptoms")
+
+        if turn == 1:
+            return (
+                f"I'm still here with you, {name}. Help is on the way.\n"
+                "On a scale of 0–10, how intense is the pain right now?\n"
+                "Keep breathing slowly. Let me know immediately if anything changes."
+            )
+        elif turn == 2:
+            return (
+                f"Emergency services should be close, {name}. If you aren't allergic and have aspirin nearby, keep one handy but wait for paramedics to advise before taking it.\n"
+                "Are you feeling shortness of breath or light-headedness?"
+            )
+        elif turn == 3:
+            return (
+                f"Stay seated or lie in the most comfortable position, {name}. If possible, loosen any tight clothing around your chest.\n"
+                "Can you tell me if the pain is spreading to your arm, jaw, or back?"
+            )
+        else:
+            # Generic supportive message for subsequent turns
+            return (
+                f"I'm right here with you, {name}. Help should arrive any moment. Continue slow, steady breaths.\n"
+                "If anything gets worse, speak out so I can update emergency responders." 
+            )
+
     # Get or create memory for this specific user
     if user_id not in user_memories:
         user_memories[user_id] = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
@@ -251,18 +404,44 @@ def agent_response(message: str, user_id: str = None) -> str:
     
     if is_emergency_response:
         if "yes" in message.lower():
-            print(f"[EMERGENCY] Calling 911 and emergency contacts for {name}")
-            print(f"[EMERGENCY] Sharing location: 123 Main Street, Apartment 4B")
-            print(f"[EMERGENCY] Notifying emergency contact: Sarah Johnson (555-0123)")
+            print(f"🚨 [EMERGENCY ALERT] User {name} (ID: {user_id}) has requested emergency assistance!")
+            print(f"📞 [EMERGENCY] Calling 911 for {name}...")
+            print(f"📍 [EMERGENCY] Sharing location with emergency services: 123 Main Street, Apartment 4B, Minneapolis, MN 55455")
+            print(f"👤 [EMERGENCY] User details: {name}, Age: 72, Medical history: Cardiac arrhythmia")
+            print(f"📱 [EMERGENCY] Notifying emergency contact: Sarah Johnson (555-0123) - Daughter")
+            print(f"📱 [EMERGENCY] Notifying emergency contact: Dr. Michael Chen (555-0456) - Primary Care Physician")
+            print(f"⏰ [EMERGENCY] Emergency initiated at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"🚑 [EMERGENCY] Estimated arrival time: 8-12 minutes")
             
-            emergency_response = f"I've called 911 and contacted your emergency contacts. Don't worry, {name}, I'm here with you. Help is on the way.\n\nWhile we wait for emergency services to arrive, try to stay calm and comfortable. Take slow, deep breaths. If you're able, sit or lie down in a comfortable position. I'll stay with you until help arrives."
+            # Set emergency state active and store reason from last agent message if possible
+            last_agent_message = None
+            for msg in reversed(memory.buffer):
+                if hasattr(msg, 'content') and isinstance(msg.content, str) and msg.content.strip():
+                    last_agent_message = msg.content
+                    break
+            reason = None
+            if last_agent_message:
+                # Try to extract a reason (e.g., "chest pain", "heart pain") from last agent message
+                import re
+                match = re.search(r'serious issue.*?([\w\s]+)[\.,]', last_agent_message, re.IGNORECASE)
+                if match:
+                    reason = match.group(1).strip()
+                elif "chest" in last_agent_message.lower():
+                    reason = "chest pain"
+                elif "heart" in last_agent_message.lower():
+                    reason = "heart pain"
+                else:
+                    reason = "a medical emergency"
+            else:
+                reason = "a medical emergency"
+            emergency_states[user_id] = {"active": True, "reason": reason}
+
+            emergency_response = f"\n\nI've called 911 and contacted your emergency contacts. Don't worry, {name}, I'm here with you. Help is on the way.\n\nWhile we wait for emergency services to arrive, try to stay calm and comfortable. Take slow, deep breaths. If you're able, sit or lie down in a comfortable position. I'll stay with you until help arrives."
             return emergency_response
         elif "no" in message.lower():
-            # Convert serious to mild and add follow-up
             print(f"[INFO] User declined emergency services for {name}, converting to mild with follow-up")
             followup_msg = f"I understand you don't want emergency services right now. I'll check back with you in 5 minutes to see how you're feeling. (Reminder: Follow up with {name} in 5 minutes)"
-            schedule_followup(user_id if user_id else "unknown_user", name)
-            print(f"Checking the user {name} after 5 mins")
+            emergency_states[user_id] = {"active": False, "reason": None}
             return followup_msg
     
     response = agent.run(message)
@@ -281,7 +460,7 @@ def agent_response(message: str, user_id: str = None) -> str:
     # Check if agent concluded it's serious - more specific detection
     serious_indicators = [
          "critical", "urgent", "may be serious",
-        "immediately", "call doctor immediately", "hospital", "dangerous",
+        "immediate", "call doctor immediately", "hospital", "dangerous",
         "concerning", "alarming"
     ]
     is_serious_concluded = any(indicator in response_lower for indicator in serious_indicators)
@@ -324,9 +503,14 @@ def agent_response(message: str, user_id: str = None) -> str:
     
     if is_emergency_response:
         if "yes" in message.lower():
-            print(f"[EMERGENCY] Calling 911 and emergency contacts for {name}")
-            print(f"[EMERGENCY] Sharing location: 123 Main Street, Apartment 4B")
-            print(f"[EMERGENCY] Notifying emergency contact: Sarah Johnson (555-0123)")
+            print(f"🚨 [EMERGENCY ALERT] User {name} (ID: {user_id}) has requested emergency assistance!")
+            print(f"📞 [EMERGENCY] Calling 911 for {name}...")
+            print(f"📍 [EMERGENCY] Sharing location with emergency services: 123 Main Street, Apartment 4B, Minneapolis, MN 55455")
+            print(f"👤 [EMERGENCY] User details: {name}, Age: 72, Medical history: Cardiac arrhythmia")
+            print(f"📱 [EMERGENCY] Notifying emergency contact: Sarah Johnson (555-0123) - Daughter")
+            print(f"📱 [EMERGENCY] Notifying emergency contact: Dr. Michael Chen (555-0456) - Primary Care Physician")
+            print(f"⏰ [EMERGENCY] Emergency initiated at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"🚑 [EMERGENCY] Estimated arrival time: 8-12 minutes")
             
             emergency_response = f"\n\nI've called 911 and contacted your emergency contacts. Don't worry, {name}, I'm here with you. Help is on the way.\n\nWhile we wait for emergency services to arrive, try to stay calm and comfortable. Take slow, deep breaths. If you're able, sit or lie down in a comfortable position. I'll stay with you until help arrives."
             response = response.strip() + emergency_response
@@ -342,9 +526,14 @@ def agent_response(message: str, user_id: str = None) -> str:
     
     # Original emergency logic for direct serious responses
     if (is_serious_concluded and ("yes" in message.lower() or "call" in message.lower() or "contact" in message.lower() or "please" in message.lower())):
-        print(f"[EMERGENCY] Calling 911 and emergency contacts for {name}")
-        print(f"[EMERGENCY] Sharing location: 123 Main Street, Apartment 4B")
-        print(f"[EMERGENCY] Notifying emergency contact: Sarah Johnson (555-0123)")
+        print(f"🚨 [EMERGENCY ALERT] User {name} (ID: {user_id}) has requested emergency assistance!")
+        print(f"📞 [EMERGENCY] Calling 911 for {name}...")
+        print(f"📍 [EMERGENCY] Sharing location with emergency services: 123 Main Street, Apartment 4B, Minneapolis, MN 55455")
+        print(f"👤 [EMERGENCY] User details: {name}, Age: 72, Medical history: Cardiac arrhythmia")
+        print(f"📱 [EMERGENCY] Notifying emergency contact: Sarah Johnson (555-0123) - Daughter")
+        print(f"📱 [EMERGENCY] Notifying emergency contact: Dr. Michael Chen (555-0456) - Primary Care Physician")
+        print(f"⏰ [EMERGENCY] Emergency initiated at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"🚑 [EMERGENCY] Estimated arrival time: 8-12 minutes")
         
         emergency_response = f"\n\nI've called 911 and contacted your emergency contacts. Don't worry, {name}, I'm here with you. Help is on the way.\n\nWhile we wait for emergency services to arrive, try to stay calm and comfortable. Take slow, deep breaths. If you're able, sit or lie down in a comfortable position. I'll stay with you until help arrives."
         response = response.strip() + emergency_response
