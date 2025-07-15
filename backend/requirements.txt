@@ -1,5 +1,22 @@
-flask
-flask-cors
-openai
-langchain
-langchain-openai
+# Core dependencies
+flask==2.3.3
+flask-cors==4.0.0
+
+# LangChain and OpenAI
+langchain==0.1.0
+langchain-openai==0.0.5
+langchain-pinecone==0.2.8
+
+# Vector database
+pinecone-client==2.2.4
+
+# Date parsing
+dateparser==1.1.8
+
+# Google APIs (for calendar and email integration)
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+google-api-python-client==2.108.0
+
+# Environment variables
+python-dotenv==1.0.0
