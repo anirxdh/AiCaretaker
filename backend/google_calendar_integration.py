@@ -101,8 +101,8 @@ Please arrive 15 minutes early to complete paperwork.""",
                     'timeZone': 'America/New_York',
                 },
                 'attendees': [
-                    {'email': 'doctor@healthcare.com'},  # Would be actual doctor's email
-                    {'email': 'patient@example.com'}     # Would be patient's email
+                    {'email': 'anirudhvasudevan11@gmail.com'},  # Would be actual doctor's email
+                    {'email': 'anirudhcodesbetter@gmail.com'}     # Would be patient's email
                 ],
                 'reminders': {
                     'useDefault': False,
@@ -171,8 +171,8 @@ Your Healthcare Team"""
             # Create the email message
             message = {
                 'raw': self._create_message(
-                    sender='healthcare@example.com',
-                    to='patient@example.com',  # Would be actual patient email
+                    sender='anirudhvasudevan11@gmail.com',
+                    to='anirudhcodesbetter@gmail.com',  # Would be actual patient email
                     subject=subject,
                     message_text=body
                 )

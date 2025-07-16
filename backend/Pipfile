@@ -10,11 +10,11 @@ openai = "*"
 langchain = "*"
 python-dotenv = "*"
 dateparser = "*"
-google-auth-oauthlib = "==1.1.0"
-google-auth-httplib2 = "==0.1.1"
-google-api-python-client = "==2.108.0"
 langchain-openai = "*"
 langchain-pinecone = "*"
+google-auth-oauthlib = "*"
+google-auth-httplib2 = "*"
+google-api-python-client = "*"
 
 [dev-packages]
 

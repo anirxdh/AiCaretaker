@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "83297a4dbd8dac14894a3c8ab842a5c25a9048cc210bfee4a5c152e9ac815f43"
+            "sha256": "fd7353703a348d1283a71c4ea4223d46206ff50f5545cd755277d6b491e46894"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -514,12 +514,12 @@
         },
         "google-api-python-client": {
             "hashes": [
-                "sha256:6396efca83185fb205c0abdbc1c2ee57b40475578c6af37f6d0e30a639aade99",
-                "sha256:9d1327213e388943ebcd7db5ce6e7f47987a7e6874e3e1f6116010eea4a0e75d"
+                "sha256:2b451cdd7fd10faeb5dd20f7d992f185e1e8f4124c35f2cdcc77c843139a4cf1",
+                "sha256:e22239797f1d085341e12cd924591fc65c56d08e0af02549d7606092e6296510"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.7'",
-            "version": "==2.108.0"
+            "version": "==2.176.0"
         },
         "google-auth": {
             "hashes": [
@@ -531,20 +531,20 @@
         },
         "google-auth-httplib2": {
             "hashes": [
-                "sha256:42c50900b8e4dcdf8222364d1f0efe32b8421fb6ed72f2613f12f75cc933478c",
-                "sha256:c64bc555fdc6dd788ea62ecf7bccffcf497bf77244887a3f3d7a5a02f8e3fc29"
+                "sha256:38aa7badf48f974f1eb9861794e9c0cb2a0511a4ec0679b1f886d108f5640e05",
+                "sha256:b65a0a2123300dd71281a7bf6e64d65a0759287df52729bdd1ae2e47dc311a3d"
             ],
             "index": "pypi",
-            "version": "==0.1.1"
+            "version": "==0.2.0"
         },
         "google-auth-oauthlib": {
             "hashes": [
-                "sha256:089c6e587d36f4803ac7e0720c045c6a8b1fd1790088b8424975b90d0ee61c12",
-                "sha256:83ea8c3b0881e453790baff4448e8a6112ac8778d1de9da0b68010b843937afb"
+                "sha256:11046fb8d3348b296302dd939ace8af0a724042e8029c1b872d87fabc9f41684",
+                "sha256:fd619506f4b3908b5df17b65f39ca8d66ea56986e5472eb5978fd8f3786f00a2"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.6'",
-            "version": "==1.1.0"
+            "version": "==1.2.2"
         },
         "googleapis-common-protos": {
             "hashes": [

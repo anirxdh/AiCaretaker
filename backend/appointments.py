@@ -299,6 +299,7 @@ def get_booking_confirmation_message(booking: Dict) -> str:
 📋 Reason: {booking['reason']}
 🆔 Booking ID: {booking['booking_id']}
 
-Your appointment has been added to your calendar. You'll receive a reminder 24 hours before your appointment.
+Your appointment has been added to your Google Calendar, and I have sent you an email with the appointment details.
+You'll receive a reminder 24 hours before your appointment.
 
 Please arrive 15 minutes early to complete any necessary paperwork. If you need to reschedule or cancel, please call us at least 24 hours in advance.""" 

@@ -13,6 +13,8 @@ import dateparser
 import threading
 from langchain.agents import initialize_agent, Tool
 from dateparser.search import search_dates
+from appointments import get_available_slots, get_slots_by_specialty, get_specialty_recommendation, format_slots_for_display, book_appointment, get_booking_confirmation_message
+import string
 
 # --- System prompt for all agent responses ---
 SYSTEM_PROMPT = """
@@ -67,6 +69,10 @@ TOOLS AVAILABLE TO YOU:
 3. User Name Tool — `get_user_name()`
    - Get the current user's name ({name})
 
+4. get_appointments(specialty, week_range) – Retrieves available doctors and appointment slots for the week, based on the medical specialty needed.
+
+5. book_appointment(slot_number, reason) – Books the selected slot, schedules it on the user's calendar, and sends a confirmation email.
+
 ---
 
 BEHAVIOR GUIDELINES:
@@ -102,6 +108,24 @@ HEALTH EVALUATION WORKFLOW:
 4. IF UNCERTAIN:
    - Ask a follow-up question
    - Never assume or guess
+
+APPOINTMENT BOOKING WORKFLOW:
+
+1. APPOINTMENT REQUEST DETECTION:
+   - Detect appointment-related requests (e.g., "I need an appointment", "book a doctor", "schedule appointment")
+   - PRIORITY: When appointment booking is detected, DO NOT analyze symptoms or call RAG
+   - Use get_appointments() to show ALL available slots
+
+2. SPECIALTY RECOMMENDATION:
+   - Only recommend specialty if user explicitly asks for a specific type of doctor
+   - Otherwise, show all available slots across all specialties
+   - Let user choose based on their own preference
+
+3. BOOKING PROCESS:
+   - Show all available slots with get_appointments() for user to review
+   - Wait for user to choose a specific slot number from the displayed list
+   - When user selects a slot (e.g., "I want slot 3" or "book slot 5"), use book_appointment(slot_number, reason)
+   - Provide confirmation with booking details and send email
 
 ---
 
@@ -146,6 +170,9 @@ user_memories = {}
 # Store pending follow-up messages for each user
 pending_followups = {}
 emergency_states = {}
+
+pending_appointment = {}  # user_id -> {'slot_number': int, 'slot_details': dict, 'reason': str, 'summary': str}
+pending_slots = {}  # user_id -> list of slots last shown
 
 PINECONE_API_KEY = os.environ.get("PINECONE_API_KEY")
 PINECONE_ENV = os.environ.get("PINECONE_ENVIRONMENT")
@@ -238,6 +265,55 @@ def get_user_name(user_id: str):
         return user_id.replace("user_", "").capitalize()
     return "User"
 
+def get_appointments_tool(specialty: str, week_range: str, current_message: str, user_id: str = None):
+    """Get available appointments - show all slots for user to choose from"""
+    all_slots = get_available_slots()
+    # Determine if we should filter by specialty
+    filtered_specialties = ["cardiology", "neurology", "geriatrics", "internal medicine", "general medicine"]
+    if specialty and specialty.lower() in filtered_specialties:
+        slots = get_slots_by_specialty(specialty)
+    else:
+        slots = all_slots
+    # Always store the shown slots for this user
+    if user_id:
+        pending_slots[user_id] = slots
+        print(f"[DEBUG] Set pending_slots for user {user_id}: {[f'{s['doctor']} {s['date']} {s['time']}' for s in slots]}")
+    return format_slots_for_display(slots)
+
+def book_appointment_tool(slot_number: str, reason: str, user_id: str, current_message: str):
+    """Book an appointment by slot number"""
+    try:
+        slot_num = int(slot_number) if slot_number else 1
+        patient_name = get_user_name(user_id)
+        
+        # If no reason provided, try to extract from message
+        if not reason:
+            # Extract symptoms from current message
+            symptom_keywords = ["pain", "hurt", "ache", "dizzy", "tight", "pressure", "nausea", "breath", "faint", "bleeding", "vomit", "palpitation", "arrhythmia", "cramp", "chest", "heart", "headache", "memory", "nerve", "stroke", "seizure", "mobility", "balance", "fall", "chronic", "diabetes"]
+            found_symptoms = [word for word in symptom_keywords if word in current_message.lower()]
+            reason = f"Patient reported: {', '.join(found_symptoms)}" if found_symptoms else "General consultation"
+        
+        # Book the appointment
+        result = book_appointment(slot_num, patient_name, reason, user_id)
+        
+        if result["success"]:
+            return get_booking_confirmation_message(result["booking"])
+        else:
+            return result["message"]
+            
+    except (ValueError, TypeError):
+        return "Please provide a valid slot number to book an appointment."
+
+def set_pending_for_direct_slot(user_id, slot_details, summary):
+    pending_slots[user_id] = [slot_details]
+    pending_appointment[user_id] = {
+        'slot_number': 1,
+        'slot_details': slot_details,
+        'reason': summary,
+        'summary': summary
+    }
+    print(f"[DEBUG] Set pending_appointment and pending_slots for user {user_id} (direct slot): {slot_details['doctor']} {slot_details['date']} {slot_details['time']}")
+
 def build_tools(user_id, current_message: str):
     """Return the list of tools, ensuring get_rag_context_tool receives the full user message for correct date parsing."""
     name = get_user_name(user_id)
@@ -259,6 +335,16 @@ def build_tools(user_id, current_message: str):
             name="get_user_name",
             func=lambda x: name,
             description="Get the current user's name."
+        ),
+        Tool(
+            name="get_appointments",
+            func=lambda specialty=None, week_range=None: get_appointments_tool(specialty, week_range, current_message, user_id),
+            description="Show all available appointment slots for the user to choose from. If user mentions a specific specialty (e.g., 'cardiology', 'neurology'), filter by that specialty. Otherwise, show all available slots across all specialties."
+        ),
+        Tool(
+            name="book_appointment",
+            func=lambda slot_number=None, reason=None: book_appointment_tool(slot_number, reason, user_id, current_message),
+            description="Book an appointment by slot number. Use this after showing available slots with get_appointments. The slot_number should be the number from the displayed list."
         )
     ]
 
@@ -284,6 +370,10 @@ def get_pending_followups(user_id: str):
         return messages
     return []
 
+def normalize_confirmation(msg):
+    msg = msg.strip().lower().strip(string.punctuation)
+    return msg
+
 def agent_response(message: str, user_id: str = None) -> str:
     print(f"[DEBUG] Incoming message: '{message}' | user_id: {user_id}")
     name = get_user_name(user_id)
@@ -295,10 +385,27 @@ def agent_response(message: str, user_id: str = None) -> str:
         "tight", "pressure", "nausea", "breath", "breathing", "faint", "bleeding",
         "vomit", "palpitation", "arrhythmia", "cramp", "chest", "heart"
     ]
+    
+    # Detect appointment booking keywords
+    appointment_keywords = [
+        "appointment", "book", "schedule", "see doctor", "see a doctor", "make appointment",
+        "need to see", "want to see", "doctor visit", "medical appointment", "consultation"
+    ]
+    
+    # Detect slot selection keywords
+    slot_selection_keywords = [
+        "slot", "choose", "select", "want slot", "pick slot", "book slot", "number", "option"
+    ]
 
     extra_context = ""
     symptom_facts = None
-    if any(word in message.lower() for word in symptom_keywords):
+    
+    # Check for appointment booking intent FIRST (prioritize over symptom analysis)
+    appointment_intent = any(word in message.lower() for word in appointment_keywords)
+    slot_selection_intent = any(word in message.lower() for word in slot_selection_keywords) and any(char.isdigit() for char in message)
+    
+    # Only do symptom analysis if user is NOT requesting an appointment
+    if not appointment_intent and any(word in message.lower() for word in symptom_keywords):
         # Determine the date to use (parse from message or default today)
         date_str_symptom = _extract_date_from_query(message) or datetime.date.today().strftime('%Y-%m-%d')
         # Fetch data for all three types
@@ -319,6 +426,120 @@ def agent_response(message: str, user_id: str = None) -> str:
             f"• Food intake: {food_ctx}\n"
             f"• Medical record: {med_ctx}\n\n"
         )
+    
+    if appointment_intent:
+        # Add appointment context to help the agent understand the intent
+        extra_context += "\n\n---\nAPPOINTMENT BOOKING REQUEST DETECTED\n"
+        extra_context += "The user is requesting to book a doctor appointment.\n"
+        extra_context += "Use get_appointments() to show ALL available slots for user to choose from.\n"
+        extra_context += "Wait for user to select a specific slot number, then use book_appointment() to confirm.\n"
+        extra_context += "DO NOT call RAG or analyze symptoms - focus only on appointment booking.\n---\n"
+    
+    # Check for slot confirmation intent (yes/no)
+    norm_msg = normalize_confirmation(message)
+    confirmation_yes = norm_msg in ["yes", "y", "confirm", "ok", "okay", "s", "sure","yes sure", "Yes", "Yes."]
+    confirmation_no = norm_msg in ["no", "n", "not ok", "not okay"]
+
+
+    # Debug logging for confirmation
+    if user_id in pending_appointment:
+        print(f"[DEBUG] Pending appointment found for user: {user_id}")
+        print(f"[DEBUG] User message for confirmation: '{message}' (normalized: '{norm_msg}')")
+
+    # If user is confirming a pending appointment
+    if user_id in pending_appointment and confirmation_yes:
+        print(f"[DEBUG] Booking appointment for user: {user_id}")
+        slot_info = pending_appointment[user_id]
+        slot_number = slot_info['slot_number']
+        reason = slot_info['reason']
+        summary = slot_info['summary']
+        # Map the selected slot from pending_slots to the global list
+        slots_list = pending_slots.get(user_id)
+        if not slots_list or slot_number < 1 or slot_number > len(slots_list):
+            del pending_appointment[user_id]
+            if user_id in pending_slots:
+                del pending_slots[user_id]
+            return "Sorry, that slot is no longer available. Please choose another."
+        slot_details = slots_list[slot_number - 1]
+        all_slots = get_available_slots()
+        global_slot_index = None
+        for idx, slot in enumerate(all_slots):
+            if (
+                slot['date'] == slot_details['date'] and
+                slot['time'] == slot_details['time'] and
+                slot['doctor'] == slot_details['doctor']
+            ):
+                global_slot_index = idx + 1  # 1-based index for booking
+                break
+        if global_slot_index is None:
+            del pending_appointment[user_id]
+            if user_id in pending_slots:
+                del pending_slots[user_id]
+            return "Sorry, that slot is no longer available. Please choose another."
+        result = book_appointment(global_slot_index, get_user_name(user_id), summary, user_id)
+        del pending_appointment[user_id]
+        if user_id in pending_slots:
+            del pending_slots[user_id]
+        if result["success"]:
+            return get_booking_confirmation_message(result["booking"])
+        else:
+            return result["message"]
+    # If user declines the slot
+    if user_id in pending_appointment and confirmation_no:
+        print(f"[DEBUG] User declined appointment for user: {user_id}")
+        del pending_appointment[user_id]
+        if user_id in pending_slots:
+            del pending_slots[user_id]
+        return "No problem. Please choose another slot number from the available appointments."
+
+    # If user selects a slot, prompt for confirmation instead of booking
+    if slot_selection_intent:
+        import re
+        match = re.search(r'slot\s*(\d+)', message.lower())
+        slot_number = None
+        if match:
+            slot_number = int(match.group(1))
+        else:
+            numbers = re.findall(r'\d+', message)
+            if numbers:
+                slot_number = int(numbers[0])
+        if slot_number is None:
+            return "Please specify a valid slot number."
+        # Use the last shown slots for this user
+        slots_list = pending_slots.get(user_id)
+        print(f"[DEBUG] Slot selection for user {user_id}: slot_number={slot_number}, pending_slots={[f'{s['doctor']} {s['date']} {s['time']}' for s in slots_list] if slots_list else None}")
+        if not slots_list or slot_number < 1 or slot_number > len(slots_list):
+            return f"Invalid slot number. Please choose between 1 and {len(slots_list) if slots_list else 0}."
+        slot_details = slots_list[slot_number - 1]
+        # Try to get recent symptom/vitals summary from memory
+        summary = "General consultation"
+        if user_id in user_memories:
+            # Look for last symptom message and vitals
+            mem = user_memories[user_id].buffer
+            last_symptom = None
+            for m in reversed(mem):
+                if hasattr(m, 'content') and any(word in m.content.lower() for word in symptom_keywords):
+                    last_symptom = m.content
+                    break
+            if last_symptom:
+                # Try to get vitals from last RAG call
+                vitals = get_rag_context_tool("vitals", user_id)
+                summary = f"Patient reported: {last_symptom}\nRecent vitals: {vitals}"
+        # Store pending slot selection
+        pending_appointment[user_id] = {
+            'slot_number': slot_number,
+            'slot_details': slot_details,
+            'reason': summary,
+            'summary': summary
+        }
+        slot_str = f"{slot_details['day']}, {slot_details['date']} at {slot_details['time']} with {slot_details['doctor']} ({slot_details['specialty']})"
+        return f"You chose: {slot_str}. Are you okay with this timing? (yes/no)"
+
+    # Detect direct slot proposal in agent output (e.g., 'Would you like to book this appointment slot?')
+    # This should be triggered when the agent proposes a specific slot by doctor/date
+    # For this, after showing a single slot, call set_pending_for_direct_slot(user_id, slot_details, summary)
+    # Example: If message contains 'Would you like to book this appointment slot?' and a slot is in context, set pending
+    # (This may require you to add this logic wherever you generate such a proposal in your agent code)
 
     tools = build_tools(user_id, message)
     system_prompt = extra_context + SYSTEM_PROMPT.format(name=name, date=today)
