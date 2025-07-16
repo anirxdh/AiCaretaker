@@ -27,6 +27,10 @@ function CareAssistantChat({ userId }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -92,10 +96,64 @@ function CareAssistantChat({ userId }) {
     setLoading(false);
   };
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = event => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append("audio", audioBlob, "recording.webm");
+
+        setTranscribing(true);
+        try {
+          const res = await fetch("/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await res.json();
+          if (data.transcription) {
+            setInput(data.transcription);
+          } else {
+            console.error("Transcription failed:", data.error);
+          }
+        } catch (err) {
+          console.error("Transcription error:", err);
+          alert("Failed to transcribe audio. Please try again.");
+        } finally {
+          setTranscribing(false);
+        }
+        
+        // Stop all tracks to release the microphone
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setRecording(true);
+    } catch (err) {
+      alert("Could not access microphone. Please check your permissions.");
+      console.error("Microphone access error:", err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+      setRecording(false);
+    }
+  };
+
   return (
     <div className="app-root">
       <div className="care-chat-container">
-        <h1 className="care-chat-title">ElderlyCare Assistant</h1>
+        <h1 className="care-chat-title">Care Assistant</h1>
         <div className="care-chat-area">
           {messages.map((msg, i) => (
             <div
@@ -112,6 +170,17 @@ function CareAssistantChat({ userId }) {
             </div>
           ))}
           {loading && <TypingAnimation />}
+          {recording && (
+            <div className="recording-indicator">
+              <span className="recording-dot"></span>
+              Recording...
+            </div>
+          )}
+          {transcribing && (
+            <div className="transcribing-indicator">
+              Transcribing your message...
+            </div>
+          )}
           <div ref={chatEndRef} />
         </div>
         <form className="care-chat-form" onSubmit={handleSend} autoComplete="off">
@@ -120,13 +189,33 @@ function CareAssistantChat({ userId }) {
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder="Type your message..."
-            disabled={loading}
+            disabled={loading || recording || transcribing}
             autoFocus
           />
+          {!recording ? (
+            <button
+              className="care-chat-mic-btn"
+              type="button"
+              onClick={startRecording}
+              disabled={loading || transcribing}
+              title="Record voice message"
+            >
+              🎤
+            </button>
+          ) : (
+            <button
+              className="care-chat-stop-btn"
+              type="button"
+              onClick={stopRecording}
+              title="Stop recording"
+            >
+              ⏹️ Stop
+            </button>
+          )}
           <button
             className="care-chat-send-btn"
             type="submit"
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || recording || transcribing}
           >
             Send
           </button>

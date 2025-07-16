@@ -175,6 +175,86 @@ html, body, #root {
   background: #4d90fe;
 }
 
+.care-chat-mic-btn {
+  background: #4CAF50;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  width: 44px;
+  height: 44px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.care-chat-mic-btn:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
+.care-chat-mic-btn:not(:disabled):hover {
+  background: #45a049;
+}
+
+.care-chat-stop-btn {
+  background: #f44336;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  width: 60px;
+  height: 44px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+.care-chat-stop-btn:hover {
+  background: #da190b;
+}
+
+.recording-indicator {
+  color: #f44336;
+  font-size: 1rem;
+  margin: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recording-dot {
+  width: 10px;
+  height: 10px;
+  background: #f44336;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.transcribing-indicator {
+  color: #1a73e8;
+  font-size: 0.9rem;
+  margin: 8px 0;
+  font-style: italic;
+}
+
 @media (max-width: 600px) {
   .care-chat-container {
     margin: 0;

@@ -297,6 +297,7 @@ def agent_response(message: str, user_id: str = None) -> str:
     ]
 
     extra_context = ""
+    symptom_facts = None
     if any(word in message.lower() for word in symptom_keywords):
         # Determine the date to use (parse from message or default today)
         date_str_symptom = _extract_date_from_query(message) or datetime.date.today().strftime('%Y-%m-%d')
@@ -309,6 +310,14 @@ def agent_response(message: str, user_id: str = None) -> str:
             f"\n\n---\nFood on {date_str_symptom}: {food_ctx}\n"
             f"Vitals on {date_str_symptom}: {vitals_ctx}\n"
             f"Medical record on {date_str_symptom}: {med_ctx}\n---\n"
+        )
+        
+        # Store a concise factual summary to prepend later (only for symptom messages)
+        symptom_facts = (
+            f"Based on your records for {date_str_symptom}:\n"
+            f"• Vitals: {vitals_ctx}\n"
+            f"• Food intake: {food_ctx}\n"
+            f"• Medical record: {med_ctx}\n\n"
         )
 
     tools = build_tools(user_id, message)
@@ -445,6 +454,11 @@ def agent_response(message: str, user_id: str = None) -> str:
             return followup_msg
     
     response = agent.run(message)
+    
+    # If symptom facts were gathered, prepend them so the user sees concrete data
+    if symptom_facts:
+        response = symptom_facts + response
+        
     print(f"[DEBUG] Agent response: {response}")
     
     # Detect agent's conclusion about severity and trigger appropriate actions
@@ -453,15 +467,14 @@ def agent_response(message: str, user_id: str = None) -> str:
     # Check if agent concluded it's mild - more specific detection
     mild_indicators = [
         "mild", "appears to be mild", "seems mild", "not serious", "minor", "within normal range",
-        "stay hydrated", "take a break"
+        "stay hydrated", "take a break" , "normal", "stable"
     ]
     is_mild_concluded = any(indicator in response_lower for indicator in mild_indicators)
     
     # Check if agent concluded it's serious - more specific detection
     serious_indicators = [
          "critical", "urgent", "may be serious",
-        "immediate", "call doctor immediately", "hospital", "dangerous",
-        "concerning", "alarming"
+        "immediate", "call doctor immediately", "hospital", "dangerous", "alarming"
     ]
     is_serious_concluded = any(indicator in response_lower for indicator in serious_indicators)
     
