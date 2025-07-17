@@ -164,7 +164,7 @@ RESTRICTIONS:
 """
 
 from langchain_openai import ChatOpenAI
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.4)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.4)
 # Create a dictionary to store separate memory instances for each user
 user_memories = {}
 # Store pending follow-up messages for each user
