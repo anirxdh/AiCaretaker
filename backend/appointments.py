@@ -9,149 +9,151 @@ from google_calendar_integration import google_integration
 APPOINTMENT_SLOTS = [
     # General Medicine - 3 slots
     {
-        "date": "2025-07-18",
-        "day": "Friday",
-        "time": "10:00 AM",
-        "available": True,
-        "doctor": "Dr. Sarah Johnson",
-        "specialty": "General Medicine",
-        "description": "Annual checkups, general health concerns, routine care"
-    },
-    {
-        "date": "2025-07-21",
-        "day": "Monday", 
-        "time": "2:30 PM",
+        "date": "2025-07-29",
+        "day": "Tuesday",
+        "time": "9:45 AM",
         "available": True,
         "doctor": "Dr. Emily Rodriguez",
         "specialty": "General Medicine",
         "description": "Annual checkups, general health concerns, routine care"
     },
     {
-        "date": "2025-07-25",
-        "day": "Friday",
-        "time": "11:15 AM",
+        "date": "2025-08-05",
+        "day": "Tuesday",
+        "time": "10:30 AM",
         "available": True,
         "doctor": "Dr. David Thompson",
         "specialty": "General Medicine",
         "description": "Annual checkups, general health concerns, routine care"
     },
-    
+    {
+        "date": "2025-08-13",
+        "day": "Wednesday",
+        "time": "2:00 PM",
+        "available": True,
+        "doctor": "Dr. Sarah Johnson",
+        "specialty": "General Medicine",
+        "description": "Annual checkups, general health concerns, routine care"
+    },
+
     # Cardiology - 3 slots
     {
-        "date": "2025-07-19",
-        "day": "Saturday",
-        "time": "9:00 AM",
+        "date": "2025-07-30",
+        "day": "Wednesday",
+        "time": "11:15 AM",
         "available": True,
         "doctor": "Dr. Michael Chen",
         "specialty": "Cardiology",
         "description": "Heart conditions, chest pain, blood pressure, arrhythmia"
     },
     {
-        "date": "2025-07-22",
-        "day": "Tuesday",
-        "time": "3:00 PM",
+        "date": "2025-08-08",
+        "day": "Friday",
+        "time": "3:30 PM",
         "available": True,
         "doctor": "Dr. Lisa Park",
         "specialty": "Cardiology",
         "description": "Heart conditions, chest pain, blood pressure, arrhythmia"
     },
     {
-        "date": "2025-07-26",
-        "day": "Saturday",
-        "time": "1:30 PM",
+        "date": "2025-08-15",
+        "day": "Friday",
+        "time": "1:00 PM",
         "available": True,
         "doctor": "Dr. James Anderson",
         "specialty": "Cardiology",
         "description": "Heart conditions, chest pain, blood pressure, arrhythmia"
     },
-    
+
     # Internal Medicine - 3 slots
     {
-        "date": "2025-07-20",
-        "day": "Sunday",
-        "time": "10:30 AM",
-        "available": True,
-        "doctor": "Dr. Robert Wilson",
-        "specialty": "Internal Medicine",
-        "description": "Complex medical conditions, chronic diseases, comprehensive care"
-    },
-    {
-        "date": "2025-07-23",
-        "day": "Wednesday",
-        "time": "4:15 PM",
+        "date": "2025-07-31",
+        "day": "Thursday",
+        "time": "10:00 AM",
         "available": True,
         "doctor": "Dr. Maria Garcia",
         "specialty": "Internal Medicine",
         "description": "Complex medical conditions, chronic diseases, comprehensive care"
     },
     {
-        "date": "2025-07-27",
-        "day": "Sunday",
-        "time": "2:00 PM",
+        "date": "2025-08-06",
+        "day": "Wednesday",
+        "time": "4:45 PM",
+        "available": True,
+        "doctor": "Dr. Robert Wilson",
+        "specialty": "Internal Medicine",
+        "description": "Complex medical conditions, chronic diseases, comprehensive care"
+    },
+    {
+        "date": "2025-08-12",
+        "day": "Tuesday",
+        "time": "3:15 PM",
         "available": True,
         "doctor": "Dr. Thomas Brown",
         "specialty": "Internal Medicine",
         "description": "Complex medical conditions, chronic diseases, comprehensive care"
     },
-    
+
     # Geriatrics - 3 slots
     {
-        "date": "2025-07-18",
+        "date": "2025-08-01",
         "day": "Friday",
-        "time": "3:00 PM",
+        "time": "9:00 AM",
+        "available": True,
+        "doctor": "Dr. Jennifer Lee",
+        "specialty": "Geriatrics",
+        "description": "Elderly care, age-related conditions, mobility issues, memory concerns"
+    },
+    {
+        "date": "2025-08-07",
+        "day": "Thursday",
+        "time": "2:30 PM",
         "available": True,
         "doctor": "Dr. Patricia Martinez",
         "specialty": "Geriatrics",
         "description": "Elderly care, age-related conditions, mobility issues, memory concerns"
     },
     {
-        "date": "2025-07-22",
-        "day": "Tuesday",
+        "date": "2025-08-14",
+        "day": "Thursday",
         "time": "11:00 AM",
         "available": True,
         "doctor": "Dr. William Davis",
         "specialty": "Geriatrics",
         "description": "Elderly care, age-related conditions, mobility issues, memory concerns"
     },
-    {
-        "date": "2025-07-26",
-        "day": "Saturday",
-        "time": "10:00 AM",
-        "available": True,
-        "doctor": "Dr. Jennifer Lee",
-        "specialty": "Geriatrics",
-        "description": "Elderly care, age-related conditions, mobility issues, memory concerns"
-    },
-    
+
     # Neurology - 3 slots
     {
-        "date": "2025-07-19",
-        "day": "Saturday",
-        "time": "2:00 PM",
-        "available": True,
-        "doctor": "Dr. Christopher Taylor",
-        "specialty": "Neurology",
-        "description": "Headaches, dizziness, memory problems, nerve issues, stroke follow-up"
-    },
-    {
-        "date": "2025-07-24",
-        "day": "Thursday",
-        "time": "9:30 AM",
+        "date": "2025-07-29",
+        "day": "Monday",
+        "time": "1:45 PM",
         "available": True,
         "doctor": "Dr. Amanda White",
         "specialty": "Neurology",
         "description": "Headaches, dizziness, memory problems, nerve issues, stroke follow-up"
     },
     {
-        "date": "2025-07-28",
+        "date": "2025-08-04",
         "day": "Monday",
-        "time": "4:00 PM",
+        "time": "3:30 PM",
+        "available": True,
+        "doctor": "Dr. Christopher Taylor",
+        "specialty": "Neurology",
+        "description": "Headaches, dizziness, memory problems, nerve issues, stroke follow-up"
+    },
+    {
+        "date": "2025-08-11",
+        "day": "Monday",
+        "time": "10:00 AM",
         "available": True,
         "doctor": "Dr. Kevin Miller",
         "specialty": "Neurology",
         "description": "Headaches, dizziness, memory problems, nerve issues, stroke follow-up"
     }
 ]
+
+
 
 def get_current_date() -> str:
     """Get current date in YYYY-MM-DD format"""

@@ -437,7 +437,7 @@ def agent_response(message: str, user_id: str = None) -> str:
     
     # Check for slot confirmation intent (yes/no)
     norm_msg = normalize_confirmation(message)
-    confirmation_yes = norm_msg in ["yes", "y", "confirm", "ok", "okay", "s", "sure","yes sure", "Yes", "Yes."]
+    confirmation_yes = norm_msg in ["yes", "y", "confirm", "ok", "okay", "s", "sure","yes sure", "Yes", "Yes.","yes."]
     confirmation_no = norm_msg in ["no", "n", "not ok", "not okay"]
 
 
@@ -685,19 +685,26 @@ def agent_response(message: str, user_id: str = None) -> str:
     # Detect agent's conclusion about severity and trigger appropriate actions
     response_lower = response.lower()
     
-    # Check if agent concluded it's mild - more specific detection
-    mild_indicators = [
-        "mild", "appears to be mild", "seems mild", "not serious", "minor", "within normal range",
-        "stay hydrated", "take a break" , "normal", "stable"
-    ]
-    is_mild_concluded = any(indicator in response_lower for indicator in mild_indicators)
-    
-    # Check if agent concluded it's serious - more specific detection
+    # Check if agent concluded it's serious - EXPANDED detection for safety
     serious_indicators = [
-         "critical", "urgent", "may be serious",
-        "immediate", "call doctor immediately", "hospital", "dangerous", "alarming"
+        "critical", "urgent", "emergency", "Emergency",
+        "call doctor immediately", "dangerous", "alarming",
+        "seek medical attention", "emergency room",
+        "heart-related symptoms","require immediate medical attention"
+        "high blood pressure", "low oxygen", "symptoms can be serious"
+        "tachycardia", "hypertension", "call 911",
+        "see a doctor immediately", "abnormal readings", "require immediate attention"
     ]
     is_serious_concluded = any(indicator in response_lower for indicator in serious_indicators)
+    
+    # Check if agent concluded it's mild - ONLY if not serious
+    mild_indicators = [
+        "rest", "mild", "appears to be mild", "seems mild", "not serious", "minor", 
+        "within normal range", "stay hydrated", "take a break", "dizziness","stable condition",
+        "no immediate concern", "routine", "minor issue"
+    ]
+    # Only check for mild if it's NOT already flagged as serious
+    is_mild_concluded = not is_serious_concluded and any(indicator in response_lower for indicator in mild_indicators)
     
     # Ensure only one is true - prioritize serious over mild
     if is_serious_concluded:

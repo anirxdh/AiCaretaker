@@ -86,12 +86,12 @@ class GoogleCalendarIntegration:
             event = {
                 'summary': f"Doctor Appointment - {booking['patient_name']}",
                 'description': f"""Appointment Details:
-• Patient: {booking['patient_name']}
-• Doctor: {booking['doctor']} ({booking['specialty']})
-• Reason: {booking['reason']}
-• Booking ID: {booking['booking_id']}
+                • Patient: {booking['patient_name']}
+                • Doctor: {booking['doctor']} ({booking['specialty']})
+                • Reason: {booking['reason']}
+                • Booking ID: {booking['booking_id']}
 
-Please arrive 15 minutes early to complete paperwork.""",
+                Please arrive 15 minutes early to complete paperwork.""",
                 'start': {
                     'dateTime': appointment_datetime.isoformat(),
                     'timeZone': 'America/New_York',
@@ -145,28 +145,28 @@ Please arrive 15 minutes early to complete paperwork.""",
             
             body = f"""Dear {booking['patient_name']},
 
-Your appointment has been successfully confirmed!
+            Your appointment has been successfully confirmed!
 
-📅 Appointment Details:
-• Date: {booking['appointment_date']} ({datetime.strptime(booking['appointment_date'], '%Y-%m-%d').strftime('%A')})
-• Time: {booking['appointment_time']}
-• Doctor: {booking['doctor']} ({booking['specialty']})
-• Location: Main Medical Center, 123 Healthcare Ave
-• Reason: {booking['reason']}
-• Booking ID: {booking['booking_id']}
+            📅 Appointment Details:
+            • Date: {booking['appointment_date']} ({datetime.strptime(booking['appointment_date'], '%Y-%m-%d').strftime('%A')})
+            • Time: {booking['appointment_time']}
+            • Doctor: {booking['doctor']} ({booking['specialty']})
+            • Location: Main Medical Center, 123 Healthcare Ave
+            • Reason: {booking['reason']}
+            • Booking ID: {booking['booking_id']}
 
-📋 Important Information:
-• Please arrive 15 minutes early to complete necessary paperwork
-• Bring your ID and insurance card
-• If you need to reschedule or cancel, please call us at least 24 hours in advance
+            📋 Important Information:
+            • Please arrive 15 minutes early to complete necessary paperwork
+            • Bring your ID and insurance card
+            • If you need to reschedule or cancel, please call us at least 24 hours in advance
 
-📅 Calendar Event:
-Your appointment has been added to your calendar: {calendar_event.get('event_url', 'N/A')}
+            📅 Calendar Event:
+            Your appointment has been added to your calendar: {calendar_event.get('event_url', 'N/A')}
 
-If you have any questions, please don't hesitate to contact us.
+            If you have any questions, please don't hesitate to contact us.
 
-Best regards,
-Your Healthcare Team"""
+            Best regards,
+            Your Healthcare Team"""
 
             # Create the email message
             message = {
