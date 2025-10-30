@@ -176,12 +176,21 @@ pending_slots = {}  # user_id -> list of slots last shown
 
 PINECONE_API_KEY = os.environ.get("PINECONE_API_KEY")
 PINECONE_ENV = os.environ.get("PINECONE_ENVIRONMENT")
-if PINECONE_API_KEY and PINECONE_ENV:
-    pinecone.init(api_key=PINECONE_API_KEY, environment=PINECONE_ENV)
-    INDEX_NAME = "elderly-health-agent"
-    index = pinecone.Index(INDEX_NAME)
-else:
-    index = None
+pc = None
+index = None
+
+def get_pinecone_index():
+    global pc, index
+    if pc is None and PINECONE_API_KEY and PINECONE_ENV:
+        try:
+            pc = pinecone.Pinecone(api_key=PINECONE_API_KEY)
+            INDEX_NAME = "elderly-health-agent"
+            index = pc.Index(INDEX_NAME)
+        except Exception as e:
+            print(f"Warning: Could not initialize Pinecone: {e}")
+            pc = None
+            index = None
+    return index
 
 def get_current_date(query=None):
     if not query or query.strip().lower() in ["today", "date", "current date", "day"]:
@@ -229,9 +238,13 @@ def _extract_date_from_query(q: str) -> Optional[str]:
 
 
 def get_rag_context_tool(query, user_id):
+    pinecone_index = get_pinecone_index()
+    if not pinecone_index:
+        return f"No Pinecone connection available. Please check your API keys."
+    
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     vectorstore = PineconeVectorStore(
-        index=index,
+        index=pinecone_index,
         embedding=embeddings,
         text_key="text",
         index_name="elderly-health-agent"
