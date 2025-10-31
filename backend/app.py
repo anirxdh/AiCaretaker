@@ -11,7 +11,6 @@ import tempfile
 app = Flask(__name__)
 CORS(app)
 
-# OpenAI client will be initialized when needed
 
 user_memories = {}
 pending_followups = {}
